@@ -4,22 +4,22 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import json
 
-# 1. Telegram 設定
+# Telegram 設定
 BOT_TOKEN = '7923487181:AAHicdAJGorw4PJNj48It_3R8e04AuOJfQk'
 CHAT_ID = '7782358896'
 
-# 2. 你要追蹤的多檔股票
+# 追蹤股票清單
 stocks = [
     {"code": "3013", "name": "晟銘電"},
     {"code": "2449", "name": "京元電子"},
     {"code": "2615", "name": "萬海"}
 ]
 
-# 3. AI 關鍵字情緒分析（可自行調整）
+# AI 關鍵字情緒
 bullish_keywords = ["得標", "漲停", "訂單", "突破", "創新高", "AI", "增資", "強勢", "利多", "爆量"]
 bearish_keywords = ["減產", "裁員", "失火", "罰款", "利空", "跌停", "轉弱", "疲弱"]
 
-# 4. 讀取 OpenAI API Key (從 GitHub secrets)
+# OpenAI API Key (GitHub secrets)
 OPENAI_API_KEY = os.environ.get('OPENAPIKEY')
 
 def send_telegram_message(text):
@@ -34,29 +34,65 @@ def get_yahoo_quote(code):
     price = soup.select_one('span[class*="Fz(32px)"]').text if soup.select_one('span[class*="Fz(32px)"]') else "無資料"
     return price
 
-def get_five_level_info(code):
-    # 五檔價量抓 Yahoo Finance 頁面
+def get_cnyes_five_level(code):
+    '''
+    鉅亨網五檔：回傳買1~5、賣1~5價量字串
+    '''
+    url = f"https://www.cnyes.com/twstock/{code}"
+    res = requests.get(url, timeout=10)
+    soup = BeautifulSoup(res.text, "html.parser")
+    bid, ask = [], []
+    try:
+        for tr in soup.select('div.tw-stock-table.tw-stock-table--left th.tw-stock-table__th'):
+            if "買" in tr.text:
+                for b in tr.parent.select('td'):
+                    bid.append(b.text.strip())
+            if "賣" in tr.text:
+                for a in tr.parent.select('td'):
+                    ask.append(a.text.strip())
+        # 組合字串
+        if bid and ask:
+            bid_str = "買:\t" + " ".join(bid[:5])
+            ask_str = "賣:\t" + " ".join(ask[:5])
+            return f"{bid_str}\n{ask_str}"
+    except Exception:
+        pass
+    return None
+
+def get_yahoo_five_level(code):
+    '''
+    Yahoo 備援五檔，若主五檔失敗自動切換
+    '''
     url = f"https://tw.stock.yahoo.com/quote/{code}.TW"
     res = requests.get(url, timeout=10)
     soup = BeautifulSoup(res.text, "html.parser")
+    bids, asks = [], []
     table = soup.find('div', {'class': 'D(f) Ai(fe) Jc(sb) Mb(12px)'})
-    if not table:
-        return "五檔資料抓取失敗"
-    bids = []
-    asks = []
     try:
         for row in table.select('div.Bgc($hoverBgColor)'):
             tds = row.select('span')
             if len(tds) == 4:
-                bids.append(f"買{len(bids)+1}:{tds[0].text}@{tds[1].text}")
-                asks.append(f"賣{len(asks)+1}:{tds[2].text}@{tds[3].text}")
-    except:
-        return "五檔資料格式錯誤"
-    bids_str = ' '.join(bids)
-    asks_str = ' '.join(asks)
-    return f"{bids_str}\n{asks_str}"
+                bids.append(f"{tds[0].text}@{tds[1].text}")
+                asks.append(f"{tds[2].text}@{tds[3].text}")
+        if bids and asks:
+            return "買:\t" + " ".join(bids) + "\n賣:\t" + " ".join(asks)
+    except Exception:
+        pass
+    return None
 
-def get_latest_news(code):
+def get_five_level_info(code):
+    '''
+    先抓鉅亨，再抓Yahoo，兩者皆無時才顯示「暫無資料」
+    '''
+    five_level = get_cnyes_five_level(code)
+    if five_level:
+        return five_level
+    five_level = get_yahoo_five_level(code)
+    if five_level:
+        return five_level
+    return "買:\t-\t-\t-\t-\t-\n賣:\t-\t-\t-\t-\t-"
+
+def get_yahoo_news(code):
     url = f"https://tw.stock.yahoo.com/quote/{code}.TW/news"
     res = requests.get(url, timeout=10)
     soup = BeautifulSoup(res.text, "html.parser")
@@ -65,7 +101,41 @@ def get_latest_news(code):
         news_list.append(n.text.strip())
         if len(news_list) >= 3:
             break
-    return news_list if news_list else ["查無新聞"]
+    return news_list
+
+def get_cnyes_news(code):
+    url = f"https://www.cnyes.com/twstock/{code}/news"
+    res = requests.get(url, timeout=10)
+    soup = BeautifulSoup(res.text, "html.parser")
+    news_list = []
+    for item in soup.select('a.tw-news-list__title'):
+        news_list.append(item.text.strip())
+        if len(news_list) >= 3:
+            break
+    return news_list
+
+def get_google_news(code):
+    url = f"https://news.google.com/rss/search?q={code}+台股"
+    res = requests.get(url, timeout=10)
+    soup = BeautifulSoup(res.text, "xml")
+    news_list = []
+    for item in soup.select('item title'):
+        news_list.append(item.text.strip())
+        if len(news_list) >= 3:
+            break
+    return news_list
+
+def get_latest_news(code):
+    news = get_yahoo_news(code)
+    if news:
+        return news
+    news = get_cnyes_news(code)
+    if news:
+        return news
+    news = get_google_news(code)
+    if news:
+        return news
+    return ["暫無新聞"]
 
 def get_news_sentiment(news_list):
     for news in news_list:
