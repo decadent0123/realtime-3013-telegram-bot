@@ -1,0 +1,24 @@
+name: Telegram Push
+
+on:
+  schedule:
+    - cron: '*/2 * * * *'   # 每2分鐘自動執行
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.11'
+
+      - name: Install requests & bs4
+        run: pip install requests beautifulsoup4
+
+      - name: Run main.py
+        run: python main.py
