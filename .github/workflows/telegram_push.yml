@@ -8,6 +8,8 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    env:
+      OPENAPIKEY: ${{ secrets.OPENAPIKEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
