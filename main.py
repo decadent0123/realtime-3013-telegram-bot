@@ -39,7 +39,6 @@ def get_five_level_info(code):
     url = f"https://tw.stock.yahoo.com/quote/{code}.TW"
     res = requests.get(url, timeout=10)
     soup = BeautifulSoup(res.text, "html.parser")
-    # 簡易抓法（如 Yahoo 頁面有變動可隨時更新）
     table = soup.find('div', {'class': 'D(f) Ai(fe) Jc(sb) Mb(12px)'})
     if not table:
         return "五檔資料抓取失敗"
@@ -69,7 +68,6 @@ def get_latest_news(code):
     return news_list if news_list else ["查無新聞"]
 
 def get_news_sentiment(news_list):
-    # 利多/利空/中性判斷
     for news in news_list:
         if any(word in news for word in bullish_keywords):
             return "利多"
