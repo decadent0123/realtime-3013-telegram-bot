@@ -2,7 +2,7 @@ name: Telegram Push
 
 on:
   schedule:
-    - cron: '*/2 * * * *'   # 每2分鐘自動執行
+    - cron: '*/2 1-5 * * 1-5'   # 週一至週五，台灣早上9:00~13:59(UTC+8)，每2分鐘自動執行
   workflow_dispatch:
 
 jobs:
