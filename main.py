@@ -28,6 +28,11 @@ DEFAULT_BUY_VOL =   ["100", "80", "60", "40", "20"]
 DEFAULT_SELL_PRICES = ["135.0", "135.5", "136.0", "136.5", "137.0"]
 DEFAULT_SELL_VOL =   ["110", "90", "70", "50", "30"]
 
+# 全局 User-Agent
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+}
+
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}
@@ -36,7 +41,7 @@ def send_telegram_message(text):
 def get_yahoo_quote(code):
     url = f"https://tw.stock.yahoo.com/quote/{code}.TW"
     try:
-        res = requests.get(url, timeout=10)
+        res = requests.get(url, headers=headers, timeout=10)
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(res.text, "html.parser")
         price = soup.select_one('span[class*="Fz(32px)"]').text if soup.select_one('span[class*="Fz(32px)"]') else "無資料"
@@ -45,10 +50,9 @@ def get_yahoo_quote(code):
         return "無資料"
 
 def get_five_level_lists(code):
-    # 回傳四個 list: [買價, 買量, 賣價, 賣量]
     try:
         url = f"https://www.cnyes.com/twstock/{code}"
-        res = requests.get(url, timeout=10)
+        res = requests.get(url, headers=headers, timeout=10)
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(res.text, "html.parser")
         buy_prices, buy_vols, sell_prices, sell_vols = [], [], [], []
@@ -64,7 +68,6 @@ def get_five_level_lists(code):
                 return buy_prices, buy_vols, sell_prices, sell_vols
     except Exception:
         pass
-    # 保底資料
     return DEFAULT_BUY_PRICES, DEFAULT_BUY_VOL, DEFAULT_SELL_PRICES, DEFAULT_SELL_VOL
 
 def format_five_level(buy_prices, buy_vols, sell_prices, sell_vols):
@@ -81,7 +84,7 @@ def get_market_indexes():
     for idx in market_indexes:
         try:
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{idx['symbol']}?interval=1d"
-            res = requests.get(url, timeout=10)
+            res = requests.get(url, headers=headers, timeout=10)
             data = res.json()
             close = data['chart']['result'][0]['meta']['regularMarketPrice']
             result.append(f"{idx['name']}: {close}")
@@ -91,12 +94,11 @@ def get_market_indexes():
 
 def get_stock_history(code, days=7):
     """取得台股個股近一週(7日)收盤價"""
-    # Yahoo Finance API 日期格式: 1970-01-01 秒數
     end = int(datetime.now().timestamp())
-    start = int((datetime.now() - timedelta(days=days+2)).timestamp())  # 含假日多取2天
+    start = int((datetime.now() - timedelta(days=days+2)).timestamp())
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?period1={start}&period2={end}&interval=1d"
     try:
-        res = requests.get(url, timeout=10)
+        res = requests.get(url, headers=headers, timeout=10)
         data = res.json()
         timestamps = data['chart']['result'][0]['timestamp']
         closes = data['chart']['result'][0]['indicators']['quote'][0]['close']
@@ -106,7 +108,7 @@ def get_stock_history(code, days=7):
                 date_str = datetime.fromtimestamp(t).strftime('%m-%d')
                 kline.append(f"{date_str}: {c:.2f}")
         if len(kline) > days:
-            kline = kline[-days:]  # 只留最新七筆
+            kline = kline[-days:]
         return kline
     except Exception:
         return ["K線抓取失敗"]
@@ -115,7 +117,7 @@ def ask_chatgpt(prompt):
     api_key = OPENAI_API_KEY
     if not api_key:
         return "❗️[錯誤] 沒有設定 OpenAI API 金鑰"
-    headers = {
+    headers_ai = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
@@ -128,7 +130,7 @@ def ask_chatgpt(prompt):
         "max_tokens": 256,
         "temperature": 0.4
     }
-    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, data=json.dumps(data))
+    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers_ai, data=json.dumps(data))
     if response.status_code == 200:
         reply = response.json()['choices'][0]['message']['content']
         return reply.strip()
