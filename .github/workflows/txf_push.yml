@@ -1,0 +1,29 @@
+name: TXF Telegram Push
+
+on:
+  schedule:
+    - cron: '30 0 * * 1-5'   # 台灣08:30=UTC+0:30，週一至週五
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      CHAT_ID: ${{ secrets.CHAT_ID }}
+      GIST_ID: ${{ secrets.GIST_ID }}
+      GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.11'
+
+      - name: Install requests & bs4
+        run: pip install requests beautifulsoup4
+
+      - name: Run main.py
+        run: python main.py
